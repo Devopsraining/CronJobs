@@ -1,0 +1,40 @@
+apiVersion: batch/v1
+kind: CronJob
+
+metadata:
+  name: frontend-hey-load
+  namespace: ecommerce
+
+spec:
+  schedule: "*/30 * * * *"
+
+  concurrencyPolicy: Forbid
+
+  successfulJobsHistoryLimit: 1
+
+  failedJobsHistoryLimit: 1
+
+  jobTemplate:
+
+    spec:
+
+      backoffLimit: 0
+
+      template:
+
+        spec:
+
+          restartPolicy: Never
+
+          containers:
+
+          - name: hey-load-generator
+
+            image: williamyeh/hey
+
+            args:
+            - "-z"
+            - "5m"
+            - "-c"
+            - "300"
+            - "http://34.56.207.19"

@@ -1,0 +1,81 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cpu-spike-sa
+  namespace: ecommerce
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cpu-spike-role
+  namespace: ecommerce
+rules:
+- apiGroups: [""]
+  resources:
+    - pods
+    - pods/exec
+  verbs:
+    - get
+    - list
+    - create
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cpu-spike-rb
+  namespace: ecommerce
+subjects:
+- kind: ServiceAccount
+  name: cpu-spike-sa
+  namespace: ecommerce
+roleRef:
+  kind: Role
+  name: cpu-spike-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: batch/v1
+kind: CronJob
+
+metadata:
+  name: workload-cpu-spike
+  namespace: ecommerce
+spec:
+  schedule: "*/30 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 300
+      backoffLimit: 0
+      template:
+        spec:
+          serviceAccountName: cpu-spike-sa
+          restartPolicy: Never
+          containers:
+          - name: cpu-spike
+            image: bitnami/kubectl:latest
+            command:
+            - /bin/sh
+            - -c
+            - |
+              POD=$(kubectl get pods -n ecommerce -l app=ecom-frontend -o jsonpath='{.items[0].metadata.name}')
+              echo "Target pod: $POD"
+              kubectl exec -n ecommerce $POD --container ecommerce-frontend -- sh -c "
+                echo "Starting controlled frontend CPU spike"
+                  yes > /dev/null &
+                  PID1=\$!
+                  yes > /dev/null &
+                  PID2=\$!
+                  yes > /dev/null &
+                  PID3=\$!
+                  yes > /dev/null &
+                  PID4=\$!
+                    sleep 240
+                  echo "Stopping CPU spike"
+                  kill \$PID1 \$PID2 \$PID3 \$PID4
+                  echo "CPU spike completed"
+              "
+              echo "CronJob completed successfully"
